@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8 Queens LinkedIn Puzzle Solver</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { margin-bottom: 5px; }
+        p { margin-bottom: 20px; color: #555; }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .palette {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .color-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .color-btn.active { border-color: #000; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-template-rows: repeat(8, 50px);
+            gap: 2px;
+            background-color: #ccc;
+            border: 2px solid #333;
+            padding: 2px;
+            margin-bottom: 20px;
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        button.action-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #0073b1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button.action-btn:hover { background-color: #005582; }
+        
+        #message { font-weight: bold; margin-bottom: 10px; height: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>8 Queens Zone Solver</h1>
+    <p>Select a color, paint the 8 zones on the board, and click Generate!</p>
+
+    <div class="controls">
+        <div class="palette" id="palette">
+            <!-- Colors will be injected here -->
+        </div>
+        <button class="action-btn" onclick="clearBoard()">Clear Board</button>
+        <button class="action-btn" onclick="solvePuzzle()">Generate Solution</button>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="board">
+        <!-- Cells injected here -->
+    </div>
+
+    <script>
+        const colors = [
+            '#ffadad', '#ffd6a5', '#fdffb6', '#caffbf', 
+            '#9bf6ff', '#a0c4ff', '#bdb2ff', '#ffc6ff'
+        ];
+        
+        let activeColorIndex = 0;
+        let isDrawing = false;
+        
+        // 8x8 grid to store the color index of each cell
+        const gridData = Array(8).fill(null).map(() => Array(8).fill(0));
+
+        // Initialize Palette
+        const paletteContainer = document.getElementById('palette');
+        colors.forEach((color, index) => {
+            const btn = document.createElement('div');
+            btn.className = `color-btn ${index === 0 ? 'active' : ''}`;
+            btn.style.backgroundColor = color;
+            btn.onclick = () => {
+                document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeColorIndex = index;
+            };
+            paletteContainer.appendChild(btn);
+        });
+
+        // Initialize Board
+        const boardContainer = document.getElementById('board');
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                cell.style.backgroundColor = colors[0];
+                
+                cell.addEventListener('mousedown', (e) => {
+                    isDrawing = true;
+                    paintCell(cell);
+                });
+                cell.addEventListener('mouseenter', (e) => {
+                    if (isDrawing) paintCell(cell);
+                });
+                
+                boardContainer.appendChild(cell);
+            }
+        }
+        
+        document.body.addEventListener('mouseup', () => { isDrawing = false; });
+
+        function paintCell(cell) {
+            const r = parseInt(cell.dataset.r);
+            const c = parseInt(cell.dataset.c);
+            gridData[r][c] = activeColorIndex;
+            cell.style.backgroundColor = colors[activeColorIndex];
+            cell.innerHTML = ""; // Clear queens if any
+        }
+
+        function clearBoard() {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    gridData[r][c] = 0;
+                    const cell = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+                    cell.style.backgroundColor = colors[0];
+                    cell.innerHTML = "";
+                }
+            }
+            document.getElementById('message').innerText = "";
+        }
+
+        // ---------- AI SOLVER LOGIC (Ported from Python) ----------
+        function getConflicts(state, areaMap) {
+            let conflicts = 0;
+            const n = state.length;
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    if (state[i] === state[j]) conflicts++; // Row
+                    if (areaMap[state[i]][i] === areaMap[state[j]][j]) conflicts++; // Area
+                    // Diagonal Touching
+                    if (Math.abs(i - j) === 1 && Math.abs(state[i] - state[j]) === 1) conflicts++;
+                }
+            }
+            return conflicts;
+        }
+
+        function solveQueensLocalSearch(areaMap, maxRestarts = 2000) {
+            const n = 8;
+            for (let restart = 0; restart < maxRestarts; restart++) {
+                let state = Array.from({length: n}, () => Math.floor(Math.random() * n));
+                
+                while (true) {
+                    let currentConflicts = getConflicts(state, areaMap);
+                    if (currentConflicts === 0) return state; // SOLVED
+                    
+                    let bestState = [...state];
+                    let bestConflicts = currentConflicts;
+                    
+                    for (let col = 0; col < n; col++) {
+                        for (let row = 0; row < n; row++) {
+                            if (state[col] !== row) {
+                                let neighbor = [...state];
+                                neighbor[col] = row;
+                                let neighborConflicts = getConflicts(neighbor, areaMap);
+                                
+                                if (neighborConflicts < bestConflicts) {
+                                    bestState = neighbor;
+                                    bestConflicts = neighborConflicts;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (bestConflicts >= currentConflicts) break; // Local minimum
+                    state = bestState;
+                }
+            }
+            return null; // Failed
+        }
+
+        function solvePuzzle() {
+            // Check if there are exactly 8 zones created by the user (optional validation, but good to have)
+            const uniqueZones = new Set();
+            gridData.forEach(row => row.forEach(val => uniqueZones.add(val)));
+            
+            document.getElementById('message').innerText = "Solving...";
+            document.getElementById('message').style.color = "black";
+            
+            // Clear old queens visually
+            document.querySelectorAll('.cell').forEach(c => c.innerHTML = "");
+
+            setTimeout(() => {
+                const solution = solveQueensLocalSearch(gridData);
+                
+                if (solution) {
+                    // Display Solution
+                    for (let col = 0; col < 8; col++) {
+                        const row = solution[col];
+                        const cell = document.querySelector(`.cell[data-r="${row}"][data-c="${col}"]`);
+                        cell.innerHTML = "♛";
+                    }
+                    document.getElementById('message').innerText = "Solution found!";
+                    document.getElementById('message').style.color = "green";
+                } else {
+                    document.getElementById('message').innerText = "No solution found. Ensure the board is properly drawn into 8 separate areas.";
+                    document.getElementById('message').style.color = "red";
+                }
+            }, 50); // Small timeout to let UI update "Solving..." message
+        }
+    </script>
+</body>
+</html>
